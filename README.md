@@ -153,6 +153,51 @@ GET /users
 GET /users/{username}/patterns
 ```
 
+### 7. **Visualization Endpoints** 🎨
+
+#### Get Network Graph
+```http
+GET /visualize/graph
+Returns: Graph structure with users, topics, and relationships
+```
+
+#### Get Sentiment Timeline
+```http
+GET /visualize/sentiment/{username}
+Returns: Sentiment progression over time with Plotly chart data
+```
+
+#### Get Topic Distribution
+```http
+GET /visualize/topics?method=lda
+Parameters: method (lda or bertopic)
+Returns: Topic distribution chart with extracted topics
+```
+
+#### Get Personality Analysis
+```http
+GET /visualize/personality/{username}
+Returns: Personality traits radar chart (Big Five inspired)
+```
+
+#### Get Conversation Patterns
+```http
+GET /visualize/patterns
+Returns: Response times, activity heatmap, message length distribution
+```
+
+#### Get Formality Analysis
+```http
+GET /visualize/formality/{username}
+Returns: Communication formality gauge chart
+```
+
+#### Get Comprehensive Analysis
+```http
+GET /analyze/comprehensive/{username}
+Returns: Complete analysis combining all metrics
+```
+
 ## 📝 WhatsApp Chat Export Format
 
 Export your WhatsApp chat:

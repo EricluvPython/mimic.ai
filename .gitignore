@@ -16,6 +16,7 @@ __pycache__/
 uploads/
 *.txt
 data/
+visualizations_output/
 
 # Neo4j
 neo4j_data/

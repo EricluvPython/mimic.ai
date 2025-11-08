@@ -48,8 +48,8 @@ class GraphSchema:
     - Message: Individual message
         Properties: content, timestamp, is_media, media_type, sentiment, length
     
-    - Topic: Extracted topics/concepts from conversations
-        Properties: name, frequency, related_keywords
+    - Topic: Extracted topics/concepts from conversations using BERTopic/LDA
+        Properties: name, keywords (list), score (float), method (bertopic/lda), last_updated
     
     - Phrase: Common phrases or expressions used by user
         Properties: text, frequency, context
@@ -237,52 +237,100 @@ class GraphDatabaseManager:
     @staticmethod
     def _analyze_patterns(tx, messages: List[ParsedMessage]):
         """
-        Analyze messages to extract topics, phrases, and patterns.
+        Analyze messages to extract topics using BERTopic.
         
-        NOTE: This is a simplified implementation for the hackathon demo.
-        Future improvement: Use NLP (spaCy, transformers) for advanced topic extraction.
+        Uses advanced NLP topic modeling to extract meaningful topics.
+        Falls back to LDA if BERTopic fails (small datasets).
         """
-        # Extract common words as basic "topics" (demo version)
-        # Future: Replace with proper NLP topic modeling
+        from app.nlp_analyzer import AdvancedNLPAnalyzer
         
-        from collections import Counter
-        import re
+        # Prepare messages for analysis
+        message_texts = [msg.message for msg in messages if not msg.is_media and msg.message.strip()]
         
-        # Simple word frequency analysis
-        all_words = []
-        for msg in messages:
-            if not msg.is_media:
-                # Remove punctuation and get words
-                words = re.findall(r'\b\w{4,}\b', msg.message.lower())
-                all_words.extend(words)
+        if len(message_texts) < 3:
+            logger.warning("Not enough messages for topic analysis, skipping")
+            return
         
-        # Get top topics (common words)
-        word_freq = Counter(all_words)
-        top_topics = word_freq.most_common(20)
+        # Use NLP analyzer for topic extraction
+        nlp_analyzer = AdvancedNLPAnalyzer()
         
-        # Create topic nodes
-        for topic, frequency in top_topics:
+        try:
+            # Try BERTopic first (more advanced)
+            topics_result = nlp_analyzer.extract_topics_bertopic(messages)
+            topic_method = "bertopic"
+            logger.info("Using BERTopic for topic extraction")
+        except Exception as e:
+            logger.warning(f"BERTopic failed ({e}), falling back to LDA")
+            try:
+                # Fall back to LDA
+                topics_result = nlp_analyzer.extract_topics_lda(messages)
+                topic_method = "lda"
+                logger.info("Using LDA for topic extraction")
+            except Exception as e2:
+                logger.error(f"Both topic extraction methods failed: {e2}")
+                return
+        
+        # Extract topics from result
+        topics = topics_result.get('topics', [])
+        
+        if not topics:
+            logger.warning("No topics extracted")
+            return
+        
+        # Create topic nodes with more details
+        for topic_info in topics[:15]:  # Limit to top 15 topics
+            topic_name = topic_info.get('topic', '')
+            if not topic_name or topic_name == '-1':
+                continue
+                
+            keywords = topic_info.get('keywords', [])
+            score = topic_info.get('score', 0.0)
+            
             query = """
             MERGE (t:Topic {name: $topic})
-            SET t.frequency = $frequency,
+            SET t.keywords = $keywords,
+                t.score = $score,
+                t.method = $method,
                 t.last_updated = datetime()
             """
-            tx.run(query, topic=topic, frequency=frequency)
+            tx.run(query, 
+                   topic=topic_name, 
+                   keywords=keywords,
+                   score=float(score),
+                   method=topic_method)
         
-        # Link users to topics based on their messages
+        # Link users to topics based on their message content
+        # Build a mapping of which topics appear in which messages
+        user_topic_counts = {}  # {(username, topic): count}
+        
         for msg in messages:
-            if not msg.is_media:
-                words = set(re.findall(r'\b\w{4,}\b', msg.message.lower()))
-                for topic, _ in top_topics:
-                    if topic in words:
-                        query = """
-                        MATCH (u:User {name: $username})
-                        MATCH (t:Topic {name: $topic})
-                        MERGE (u)-[d:DISCUSSES]->(t)
-                        ON CREATE SET d.count = 1
-                        ON MATCH SET d.count = d.count + 1
-                        """
-                        tx.run(query, username=msg.username, topic=topic)
+            if msg.is_media or not msg.message.strip():
+                continue
+            
+            msg_lower = msg.message.lower()
+            
+            for topic_info in topics[:15]:
+                topic_name = topic_info.get('topic', '')
+                if not topic_name or topic_name == '-1':
+                    continue
+                
+                # Check if any keyword from this topic appears in the message
+                keywords = topic_info.get('keywords', [])
+                for keyword in keywords[:3]:  # Check top 3 keywords per topic
+                    if keyword.lower() in msg_lower:
+                        key = (msg.username, topic_name)
+                        user_topic_counts[key] = user_topic_counts.get(key, 0) + 1
+                        break
+        
+        # Create DISCUSSES relationships
+        for (username, topic), count in user_topic_counts.items():
+            query = """
+            MATCH (u:User {name: $username})
+            MATCH (t:Topic {name: $topic})
+            MERGE (u)-[d:DISCUSSES]->(t)
+            SET d.count = $count
+            """
+            tx.run(query, username=username, topic=topic, count=count)
     
     def query_user_patterns(self, username: str) -> Dict[str, Any]:
         """
@@ -389,3 +437,180 @@ class GraphDatabaseManager:
             """).single()
             
             return dict(stats) if stats else {}
+    
+    def get_all_messages_for_user(self, username: str) -> List[ParsedMessage]:
+        """
+        Get all messages for a specific user.
+        
+        Args:
+            username: Username to retrieve messages for
+            
+        Returns:
+            List of ParsedMessage objects
+        """
+        from datetime import datetime
+        
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {name: $username})-[:SENT]->(m:Message)
+                RETURN m.content as content,
+                       m.timestamp as timestamp,
+                       m.is_media as is_media,
+                       m.media_type as media_type,
+                       u.name as username
+                ORDER BY m.timestamp ASC
+            """, username=username)
+            
+            messages = []
+            for record in result:
+                # Convert Neo4j DateTime to Python datetime
+                timestamp_str = str(record['timestamp'])
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                except:
+                    timestamp = datetime.now()
+                
+                messages.append(ParsedMessage(
+                    timestamp=timestamp,
+                    username=record['username'],
+                    message=record['content'],
+                    is_media=record['is_media'],
+                    media_type=record['media_type']
+                ))
+            
+            return messages
+    
+    def get_all_messages(self) -> List[ParsedMessage]:
+        """
+        Get all messages from the database.
+        
+        Returns:
+            List of all ParsedMessage objects
+        """
+        from datetime import datetime
+        
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (u:User)-[:SENT]->(m:Message)
+                RETURN m.content as content,
+                       m.timestamp as timestamp,
+                       m.is_media as is_media,
+                       m.media_type as media_type,
+                       u.name as username
+                ORDER BY m.timestamp ASC
+            """)
+            
+            messages = []
+            for record in result:
+                # Convert Neo4j DateTime to Python datetime
+                timestamp_str = str(record['timestamp'])
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                except:
+                    timestamp = datetime.now()
+                
+                messages.append(ParsedMessage(
+                    timestamp=timestamp,
+                    username=record['username'],
+                    message=record['content'],
+                    is_media=record['is_media'],
+                    media_type=record['media_type']
+                ))
+            
+            return messages
+    
+    def get_graph_structure(self) -> Dict[str, Any]:
+        """
+        Get graph structure for visualization.
+        
+        Returns:
+            Dictionary with nodes and edges for graph visualization
+        """
+        with self.driver.session() as session:
+            # Get user nodes
+            users = session.run("""
+                MATCH (u:User)
+                RETURN u.name as name, u.message_count as message_count
+            """).data()
+            
+            # Get topic nodes
+            topics = session.run("""
+                MATCH (t:Topic)
+                RETURN t.name as name, 
+                       COALESCE(t.score, t.frequency, 0) as score,
+                       t.keywords as keywords
+                ORDER BY score DESC
+                LIMIT 20
+            """).data()
+            
+            # Get user-topic relationships
+            user_topic_edges = session.run("""
+                MATCH (u:User)-[d:DISCUSSES]->(t:Topic)
+                RETURN u.name as source, t.name as target, d.count as weight
+            """).data()
+            
+            # Get user-user interactions
+            user_interactions = session.run("""
+                MATCH (u1:User)-[:SENT]->(m1:Message)-[:FOLLOWS]->(m2:Message)<-[:SENT]-(u2:User)
+                WHERE u1.name <> u2.name
+                RETURN u1.name as source, u2.name as target, count(*) as weight
+            """).data()
+            
+            # Format nodes
+            nodes = []
+            node_index = {}
+            idx = 0
+            
+            # Add user nodes
+            for user in users:
+                nodes.append({
+                    'id': user['name'],
+                    'label': user['name'],
+                    'type': 'user',
+                    'size': min(50, 10 + (user.get('message_count', 0) or 0) / 2),
+                    'value': user.get('message_count', 0) or 0
+                })
+                node_index[user['name']] = idx
+                idx += 1
+            
+            # Add topic nodes
+            for topic in topics[:15]:  # Limit to top 15 topics
+                score = topic.get('score', 0) or 0
+                nodes.append({
+                    'id': topic['name'],
+                    'label': topic['name'],
+                    'type': 'topic',
+                    'size': min(30, 5 + float(score) * 2),
+                    'value': float(score),
+                    'keywords': topic.get('keywords', [])
+                })
+                node_index[topic['name']] = idx
+                idx += 1
+            
+            # Format edges
+            edges = []
+            
+            # Add user-topic edges
+            for edge in user_topic_edges:
+                if edge['source'] in node_index and edge['target'] in node_index:
+                    edges.append({
+                        'source': edge['source'],
+                        'target': edge['target'],
+                        'weight': edge.get('weight', 1) or 1,
+                        'type': 'discusses'
+                    })
+            
+            # Add user-user interaction edges
+            for edge in user_interactions:
+                if edge['source'] in node_index and edge['target'] in node_index:
+                    edges.append({
+                        'source': edge['source'],
+                        'target': edge['target'],
+                        'weight': edge.get('weight', 1) or 1,
+                        'type': 'interacts'
+                    })
+            
+            return {
+                'nodes': nodes,
+                'edges': edges
+            }

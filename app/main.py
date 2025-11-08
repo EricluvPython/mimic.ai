@@ -14,6 +14,9 @@ from app.config import get_settings
 from app.parser import WhatsAppParser, ParsedMessage
 from app.graph_db import GraphDatabaseManager
 from app.llm_service import OpenRouterService
+from app.nlp_analyzer import AdvancedNLPAnalyzer
+from app.conversation_analyzer import ConversationPatternAnalyzer
+from app.visualization_service import VisualizationService
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +28,9 @@ logger = logging.getLogger(__name__)
 # Global instances
 db_manager: Optional[GraphDatabaseManager] = None
 llm_service: OpenRouterService = OpenRouterService()
+nlp_analyzer: AdvancedNLPAnalyzer = AdvancedNLPAnalyzer()
+conversation_analyzer: ConversationPatternAnalyzer = ConversationPatternAnalyzer()
+viz_service: VisualizationService = VisualizationService()
 
 
 @asynccontextmanager
@@ -356,6 +362,299 @@ async def get_user_patterns(username: str):
         )
 
 
+# Visualization Endpoints
+
+@app.get("/visualize/graph")
+async def visualize_graph():
+    """
+    Get graph structure for network visualization.
+    
+    Returns:
+        Plotly-compatible network graph with nodes and edges
+    """
+    try:
+        graph_structure = db_manager.get_graph_structure()
+        
+        # Create visualization
+        chart_data = viz_service.create_network_graph(graph_structure)
+        
+        return {
+            'chart': chart_data,
+            'analysis': graph_structure
+        }
+        
+    except Exception as e:
+        logger.error(f"Graph visualization error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating graph visualization: {str(e)}"
+        )
+
+
+@app.get("/visualize/sentiment/{username}")
+async def visualize_sentiment(username: str):
+    """
+    Get sentiment progression visualization for a user.
+    
+    Args:
+        username: Username to analyze
+        
+    Returns:
+        Plotly-compatible sentiment chart data
+    """
+    try:
+        # Get messages for user
+        messages = db_manager.get_all_messages_for_user(username)
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No messages found for user '{username}'"
+            )
+        
+        # Analyze sentiment
+        sentiment_data = nlp_analyzer.analyze_sentiment_progression(messages)
+        
+        # Create visualization
+        chart_data = viz_service.create_sentiment_timeline_chart(sentiment_data)
+        
+        return {
+            'chart': chart_data,
+            'analysis': sentiment_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Sentiment visualization error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating sentiment visualization: {str(e)}"
+        )
+
+
+@app.get("/visualize/topics")
+async def visualize_topics(method: str = "lda"):
+    """
+    Get topic distribution visualization.
+    
+    Args:
+        method: Topic modeling method ('lda' or 'bertopic')
+        
+    Returns:
+        Plotly-compatible topic distribution chart
+    """
+    try:
+        # Get all messages
+        messages = db_manager.get_all_messages()
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404,
+                detail="No messages found in database"
+            )
+        
+        # Analyze topics
+        if method.lower() == 'bertopic':
+            topics_data = nlp_analyzer.extract_topics_bertopic(messages)
+        else:
+            topics_data = nlp_analyzer.extract_topics_lda(messages)
+        
+        # Create visualization
+        chart_data = viz_service.create_topic_distribution_chart(topics_data)
+        
+        return {
+            'chart': chart_data,
+            'analysis': topics_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Topic visualization error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating topic visualization: {str(e)}"
+        )
+
+
+@app.get("/visualize/personality/{username}")
+async def visualize_personality(username: str):
+    """
+    Get personality traits visualization for a user.
+    
+    Args:
+        username: Username to analyze
+        
+    Returns:
+        Plotly-compatible personality radar chart
+    """
+    try:
+        messages = db_manager.get_all_messages_for_user(username)
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No messages found for user '{username}'"
+            )
+        
+        # Analyze personality
+        personality_data = nlp_analyzer.analyze_personality_traits(messages)
+        
+        # Create visualization
+        chart_data = viz_service.create_personality_radar_chart(personality_data)
+        
+        return {
+            'chart': chart_data,
+            'analysis': personality_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Personality visualization error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating personality visualization: {str(e)}"
+        )
+
+
+@app.get("/visualize/patterns")
+async def visualize_patterns():
+    """
+    Get conversation pattern visualizations.
+    
+    Returns:
+        Multiple chart data for conversation patterns
+    """
+    try:
+        messages = db_manager.get_all_messages()
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404,
+                detail="No messages found in database"
+            )
+        
+        # Analyze patterns
+        patterns = conversation_analyzer.analyze_comprehensive(messages)
+        
+        # Create visualizations
+        response_time_chart = viz_service.create_response_time_distribution(patterns['response_times'])
+        activity_chart = viz_service.create_activity_heatmap(patterns['activity_patterns'])
+        length_chart = viz_service.create_message_length_distribution(patterns['message_lengths'])
+        
+        return {
+            'response_times': {
+                'chart': response_time_chart,
+                'analysis': patterns['response_times']
+            },
+            'activity': {
+                'chart': activity_chart,
+                'analysis': patterns['activity_patterns']
+            },
+            'message_lengths': {
+                'chart': length_chart,
+                'analysis': patterns['message_lengths']
+            },
+            'conversation_flow': patterns['conversation_flow'],
+            'question_patterns': patterns['question_patterns']
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Pattern visualization error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating pattern visualizations: {str(e)}"
+        )
+
+
+@app.get("/visualize/formality/{username}")
+async def visualize_formality(username: str):
+    """
+    Get formality level visualization for a user.
+    
+    Args:
+        username: Username to analyze
+        
+    Returns:
+        Plotly-compatible formality gauge chart
+    """
+    try:
+        messages = db_manager.get_all_messages_for_user(username)
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No messages found for user '{username}'"
+            )
+        
+        # Analyze formality
+        formality_data = nlp_analyzer.analyze_formality(messages)
+        
+        # Create visualization
+        chart_data = viz_service.create_formality_gauge(formality_data)
+        
+        return {
+            'chart': chart_data,
+            'analysis': formality_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Formality visualization error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating formality visualization: {str(e)}"
+        )
+
+
+@app.get("/analyze/comprehensive/{username}")
+async def analyze_comprehensive(username: str):
+    """
+    Get comprehensive analysis for a user (all analytics combined).
+    
+    Args:
+        username: Username to analyze
+        
+    Returns:
+        Complete analysis with all metrics
+    """
+    try:
+        messages = db_manager.get_all_messages_for_user(username)
+        all_messages = db_manager.get_all_messages()
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No messages found for user '{username}'"
+            )
+        
+        # Run all analyses
+        nlp_analysis = nlp_analyzer.analyze_comprehensive(messages)
+        conversation_analysis = conversation_analyzer.analyze_comprehensive(all_messages)
+        
+        return {
+            'username': username,
+            'total_messages': len(messages),
+            'nlp_analysis': nlp_analysis,
+            'conversation_patterns': conversation_analysis,
+            'graph_patterns': db_manager.query_user_patterns(username)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Comprehensive analysis error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating comprehensive analysis: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     settings = get_settings()
@@ -364,5 +663,6 @@ if __name__ == "__main__":
         "app.main:app",
         host=settings.app_host,
         port=settings.app_port,
-        reload=settings.debug
+        reload=settings.debug,
+        reload_dirs=["app"] if settings.debug else None
     )
