@@ -2,12 +2,14 @@
 
 import { useRef, useState } from 'react'
 import { extractTxtFromZip, extractPersonNameFromZip } from '@/lib/fileUtils'
+import React from 'react'
 
 interface FileUploadProps {
   onFileUpload: (content: string, fileName: string, chatName?: string) => void
+  theme?: 'green' | 'futuristic'
 }
 
-export default function FileUpload({ onFileUpload }: FileUploadProps) {
+export default function FileUpload({ onFileUpload, theme = 'green' }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
 
@@ -70,12 +72,17 @@ export default function FileUpload({ onFileUpload }: FileUploadProps) {
         onChange={handleFileSelect}
         className="hidden"
       />
-      <button
-        onClick={handleButtonClick}
-        disabled={isUploading}
-        className="flex items-center space-x-2 px-3 py-2 bg-whatsapp-green hover:bg-whatsapp-dark rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Upload WhatsApp chat export"
-      >
+       <button
+         onClick={handleButtonClick}
+         disabled={isUploading}
+         className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed btn-clean"
+         title="Upload WhatsApp chat export"
+         style={
+           theme === 'futuristic'
+             ? { background: 'linear-gradient(90deg,#60A5FA,#3B82F6)', color: 'white', border: '1px solid rgba(0,0,0,0.04)' }
+             : { background: 'white', color: 'var(--mimic-green-600)', border: '1px solid var(--mimic-green-600)' }
+         }
+       >
         {isUploading ? (
           <>
             <svg

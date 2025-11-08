@@ -9,7 +9,10 @@ import dayjs from 'dayjs' // ✅ Added for date dividers
 export interface Message {
   id: string
   text: string
-  sender: 'user' | 'ai'
+  // allow arbitrary sender strings (e.g. 'user', 'AI', or a person's name)
+  sender: string
+  // mark messages that belong to the primary chat participant (used to align bubbles to the right)
+  isFromPrimary?: boolean
   timestamp: Date
 }
 
@@ -22,6 +25,7 @@ interface ChatInterfaceProps {
   onFileUpload: (content: string, fileName?: string, chatName?: string) => void
   onSendMessage: (message: Message) => void
   onMenuClick?: () => void
+  theme?: 'green' | 'futuristic'
 }
 
 export default function ChatInterface({
@@ -33,7 +37,9 @@ export default function ChatInterface({
   onFileUpload,
   onSendMessage,
   onMenuClick,
+  theme = 'green',
 }: ChatInterfaceProps) {
+  const isFuturistic = theme === 'futuristic'
   const [inputText, setInputText] = useState('')
   const [isAiMode, setIsAiMode] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -43,25 +49,19 @@ export default function ChatInterface({
   const prevMessagesCountRef = useRef<number>(0)
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    // Use the provided behavior ('auto' or 'smooth').
-    // When switching chats (large number of messages) we'll call with 'auto'
-    // so the UI starts at the latest immediately without visible scrolling.
     messagesEndRef.current?.scrollIntoView({ behavior })
   }
 
   useEffect(() => {
-    // If we're switching chats (chatId changed), jump to bottom immediately.
     if (prevChatIdRef.current !== chatId) {
       scrollToBottom('auto')
     } else {
-      // Same chat: if messages appended, use smooth scroll for nicer UX.
       const prevCount = prevMessagesCountRef.current || 0
       if (messages.length > prevCount) {
         scrollToBottom('smooth')
       }
     }
 
-    // Update trackers for next render
     prevChatIdRef.current = chatId
     prevMessagesCountRef.current = messages.length
   }, [messages, chatId])
@@ -73,16 +73,15 @@ export default function ChatInterface({
       id: `${chatId}-${Date.now()}`,
       text: inputText,
       sender: 'user',
+      isFromPrimary: true,
       timestamp: new Date(),
     }
 
     onSendMessage(userMessage)
     setInputText('')
 
-    // If AI mode is on, simulate AI response (you'll integrate your AI here later)
     if (isAiMode) {
       setIsProcessing(true)
-      // Simulate AI processing delay
       setTimeout(() => {
         const aiMessage: Message = {
           id: `${chatId}-${Date.now() + 1}`,
@@ -104,15 +103,14 @@ export default function ChatInterface({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full bg-[var(--mimic-bg)] overflow-hidden">
       {/* Header */}
-      <div className="bg-whatsapp-dark text-white p-4 flex items-center justify-between border-b border-whatsapp-darker">
+      <div className="top-strip flex items-center justify-between border-b" style={{ borderColor: 'rgba(0,0,0,0.04)' }}>
         <div className="flex items-center space-x-3">
-          {/* Mobile Menu Button */}
           {onMenuClick && (
             <button
               onClick={onMenuClick}
-              className="md:hidden p-2 hover:bg-whatsapp-darker rounded-full transition-colors"
+              className="md:hidden p-2 hover:bg-green-700 rounded-full transition-colors"
               title="Menu"
             >
               <svg
@@ -131,32 +129,38 @@ export default function ChatInterface({
               </svg>
             </button>
           )}
-          <div className="w-10 h-10 rounded-full bg-whatsapp-green flex items-center justify-center">
-            <span className="text-white font-bold">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(90deg,var(--mimic-green-500),var(--mimic-green-700))', color: 'white', boxShadow: '0 6px 18px rgba(16,185,129,0.12)' }}>
+            <span className="text-on-dark font-bold">
               {chatName.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <h2 className="font-semibold">{chatName}</h2>
-            <p className="text-xs text-whatsapp-light">
+            <h2 className="font-semibold text-on-dark">{chatName}</h2>
+            <p className="text-xs text-on-dark" style={{ opacity: 0.9 }}>
               {uploadedChat.length > 0
                 ? `${uploadedChat.length} messages loaded • ${chatSenders.length} sender(s)`
                 : 'Online'}
             </p>
           </div>
         </div>
-        <FileUpload onFileUpload={onFileUpload} />
+        <FileUpload onFileUpload={onFileUpload} theme={theme} />
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 bg-whatsapp-lighter">
+    {/* Messages Area */}
+    <div className="flex-1 overflow-y-auto p-4 bg-[var(--mimic-surface)]">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <div className="text-6xl mb-4">💬</div>
-            <p className="text-lg font-medium">No messages yet</p>
-            <p className="text-sm mt-2">
-              Start a conversation or upload a WhatsApp chat
-            </p>
+            <div className="mb-4">
+                <div className="w-24 h-24 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(90deg,var(--mimic-green-500),var(--mimic-green-300))', color: 'white' }}>
+                  <div className="text-4xl">💬</div>
+                </div>
+              </div>
+            <p className="text-xl font-semibold text-on-light mb-2">No messages yet</p>
+            <p className="text-sm text-[var(--mimic-muted)] mb-4">Start a conversation or upload a WhatsApp chat</p>
+            {/* <div className="flex gap-2">
+              <button className="px-4 py-2 bg-green-600 text-white rounded-md">Upload chat</button>
+              <button className="px-4 py-2 bg-white border border-gray-200 rounded-md">Create sample</button>
+            </div> */}
           </div>
         ) : (
           <div className="space-y-2">
@@ -180,7 +184,7 @@ export default function ChatInterface({
                       </span>
                     </div>
                   )}
-                  <MessageBubble message={message} />
+                  <MessageBubble message={message} theme={theme} chatSenders={chatSenders} />
                 </div>
               )
             })}
@@ -210,16 +214,39 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="bg-gray-100 p-4 border-t border-gray-300">
+      {/* ✅ AI suggestion bubbles (show when AI Mode is ON) */}
+      {isAiMode && (
+        <div className="px-4 py-3 flex flex-wrap gap-2 justify-center ai-area">
+          {[
+            'Summarize this chat 🧠',
+            'Write a funny reply 😂',
+            'Give me key insights 💡',
+          ].map((suggestion, i) => (
+            <button
+              key={i}
+              onClick={() => setInputText(suggestion)}
+              className="text-sm px-3 py-1 rounded-full shadow-sm"
+              style={isFuturistic
+                ? (i === 0
+                  ? { background: 'linear-gradient(90deg,#60A5FA,#3B82F6)', color: 'white', boxShadow: '0 0 6px rgba(96,165,250,0.18)' }
+                  : { background: 'linear-gradient(90deg,#EFF8FF,#E9F2FF)', color: 'var(--futuristic-text-navy)' })
+                : (i === 0
+                  ? { background: 'linear-gradient(90deg,#34D399,#10B981)', color: 'white' }
+                  : { background: '#ECFDF5', color: '#065F46' })
+              }
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+
+  {/* Input Area */}
+  <div className="p-4 border-t" style={{ background: 'transparent', borderColor: 'rgba(0,0,0,0.06)' }}>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setIsAiMode(!isAiMode)}
-            className={`flex items-center justify-center w-12 h-12 rounded-full transition-all ${
-              isAiMode
-                ? 'bg-whatsapp-green text-white shadow-lg'
-                : 'bg-white text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`flex items-center justify-center w-12 h-12 rounded-full transition-all ${isFuturistic ? (isAiMode ? 'bg-gradient-to-r from-indigo-500 to-sky-400 text-white shadow-lg' : 'bg-white text-gray-200 hover:bg-gray-900') : (isAiMode ? 'bg-green-600 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-200')}`}
             title={isAiMode ? 'AI Mode: ON' : 'AI Mode: OFF'}
           >
             <svg
@@ -237,7 +264,7 @@ export default function ChatInterface({
               />
             </svg>
           </button>
-          <input
+            <input
             ref={inputRef}
             type="text"
             value={inputText}
@@ -248,12 +275,13 @@ export default function ChatInterface({
                 ? 'Type a message (AI will respond)...'
                 : 'Type a message...'
             }
-            className="flex-1 px-4 py-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent"
+            className="flex-1 px-4 py-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--mimic-green-500)] focus:border-transparent text-on-light bg-white"
           />
           <button
             onClick={handleSendMessage}
             disabled={!inputText.trim()}
-            className="bg-whatsapp-green text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-whatsapp-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`w-12 h-12 rounded-full flex items-center justify-center hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+            style={{ background: 'linear-gradient(90deg,var(--mimic-green-500),var(--mimic-green-700))', color: 'white' }}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -272,8 +300,8 @@ export default function ChatInterface({
           </button>
         </div>
         {isAiMode && (
-          <div className="mt-2 flex items-center space-x-2 text-xs text-whatsapp-dark">
-            <div className="w-2 h-2 bg-whatsapp-green rounded-full animate-pulse"></div>
+          <div className="mt-2 flex items-center space-x-2 text-xs text-gray-700">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             <span>AI Mode Active - Responses will be generated</span>
           </div>
         )}

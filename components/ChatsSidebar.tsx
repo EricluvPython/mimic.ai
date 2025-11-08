@@ -1,143 +1,84 @@
 'use client'
-
-export interface Chat {
+import React from 'react'
+type Chat = {
   id: string
-  name: string
-  lastMessage: string
-  lastMessageTime: Date
-  unreadCount?: number
-  avatar?: string
+  name?: string
+  lastMessage?: string
+  lastMessageTime?: string | number | Date
 }
 
-interface ChatsSidebarProps {
+// ChatsSidebarProps defined below with theme support
+type ChatsSidebarProps = {
   chats: Chat[]
-  activeChatId: string | null
-  onSelectChat: (chatId: string) => void
+  activeChatId?: string | null
+  onSelectChat: (id: string) => void
   onNewChat: () => void
+  theme?: 'green' | 'futuristic'
 }
 
-export default function ChatsSidebar({
-  chats,
-  activeChatId,
-  onSelectChat,
-  onNewChat,
-}: ChatsSidebarProps) {
-  const formatTime = (date: Date) => {
-    const now = new Date()
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-    
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    } else if (diffInHours < 168) {
-      return date.toLocaleDateString('en-US', { weekday: 'short' })
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    }
-  }
-
+export default function ChatsSidebar({ chats, activeChatId, onSelectChat, onNewChat, theme = 'green' }: any) {
+  const isFuturistic = theme === 'futuristic'
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200 w-full md:w-80 flex-shrink-0">
-      {/* Header */}
-      <div className="bg-whatsapp-dark text-white p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-semibold">Chats</h1>
+    <div className="h-full flex flex-col bg-[var(--mimic-bg)]">
+      {/* Top strip */}
+      <div className="top-strip h-16 flex items-center px-4 rounded-tl-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-on-dark" style={{ background: 'linear-gradient(90deg,var(--mimic-green-500),var(--mimic-green-700))' }}>M</div>
+          <div className="text-on-dark">
+            <div className="text-sm font-semibold">Mimic AI</div>
+            <div className="text-xs opacity-80">Chats • Smart insights</div>
+          </div>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
           <button
             onClick={onNewChat}
-            className="p-2 hover:bg-whatsapp-darker rounded-full transition-colors"
-            title="New Chat"
+            className="btn-mimic px-3 py-2 text-sm rounded-lg shadow-sm btn-clean"
+            style={{
+              background: 'white',
+              color: 'var(--mimic-green-600)',
+              border: '1px solid var(--mimic-green-600)',
+              boxShadow: '0 6px 18px rgba(2,6,23,0.04)'
+            }}
+            title="New chat"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            New
           </button>
-        </div>
-        {/* Search bar */}
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search or start new chat"
-            className="w-full bg-white text-gray-800 px-4 pl-10 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-whatsapp-green"
-          />
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 absolute left-3 top-2.5 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
         </div>
       </div>
 
-      {/* Chat List */}
-      <div className="flex-1 overflow-y-auto">
-        {chats.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 p-4">
-            <div className="text-5xl mb-4">💬</div>
-            <p className="text-sm text-center">No chats yet</p>
-            <p className="text-xs text-center mt-1">Start a new chat to begin</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {chats.map((chat) => (
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="mb-3">
+          <input
+            placeholder="Search chats..."
+            className="w-full px-3 py-2 rounded-lg bg-[var(--mimic-surface)] border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[var(--mimic-green-500)] text-on-light"
+          />
+        </div>
+
+        <div className="overflow-y-auto space-y-3 pb-6">
+          {chats.map((chat: any) => {
+            const isActive = activeChatId === chat.id
+            return (
               <button
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
-                className={`w-full p-4 hover:bg-gray-50 transition-colors text-left ${
-                  activeChatId === chat.id ? 'bg-gray-100' : ''
-                }`}
+                className={`w-full text-left p-3 rounded-lg transition-colors flex items-center gap-3 shadow-sm ${isActive ? 'card' : 'hover:bg-[rgba(4,120,87,0.03)]'}`}
+                style={{ boxShadow: '0 6px 14px rgba(2,6,23,0.06)', backgroundColor: isActive ? 'rgba(16,185,129,0.06)' : undefined }}
               >
-                <div className="flex items-center space-x-3">
-                  {/* Avatar */}
-                  <div className="w-12 h-12 rounded-full bg-whatsapp-green flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-semibold text-lg">
-                      {chat.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  
-                  {/* Chat Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold text-gray-900 text-sm truncate">
-                        {chat.name}
-                      </h3>
-                      <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                        {formatTime(chat.lastMessageTime)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-600 truncate">
-                        {chat.lastMessage}
-                      </p>
-                      {chat.unreadCount && chat.unreadCount > 0 && (
-                        <span className="bg-whatsapp-green text-white text-xs rounded-full px-2 py-0.5 ml-2 flex-shrink-0">
-                          {chat.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center font-semibold shadow-sm"
+                  style={{ background: '#f3faf6', color: 'var(--mimic-green-700)' }}
+                >
+                  {chat.name?.charAt(0)?.toUpperCase() || 'C'}
                 </div>
+                <div className="flex-1">
+                  <div className="font-medium text-on-light">{chat.name}</div>
+                  <div className="text-xs text-[var(--mimic-muted)] truncate">{chat.lastMessage}</div>
+                </div>
+                <div className="text-[11px] text-gray-400">{chat.lastMessageTime ? new Date(chat.lastMessageTime).toLocaleDateString() : ''}</div>
               </button>
-            ))}
-          </div>
-        )}
+            )
+          })}
+        </div>
       </div>
     </div>
   )

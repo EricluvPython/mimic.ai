@@ -1,12 +1,19 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import ChatsSidebar, { type Chat } from './ChatsSidebar'
+import ChatsSidebar from './ChatsSidebar'
 import ChatInterface from './ChatInterface'
 import { type Message } from './ChatInterface'
 import { parseWhatsAppChat, extractSenders, type ParsedMessage } from '@/lib/chatParser'
 import ConfirmModal from './ConfirmModal'
 import { extractTxtFromZip, extractPersonNameFromZip } from '@/lib/fileUtils'
+
+interface Chat {
+  id: string
+  name: string
+  lastMessage: string
+  lastMessageTime: Date
+}
 
 interface ChatData {
   id: string
@@ -31,11 +38,33 @@ export default function ChatContainer({
   onFileProcessed,
   onCancelUpload 
 }: ChatContainerProps = {}) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    // mark mounted to avoid CSS transition flicker on first render
+    setMounted(true)
+  }, [])
+  // Theme state: 'green' (original) or 'futuristic'
+  const [theme, setTheme] = useState<'green' | 'futuristic'>(() => {
+    try {
+      if (typeof window === 'undefined') return 'green'
+      const t = localStorage.getItem('mimic:theme') as 'green' | 'futuristic' | null
+      return t || 'green'
+    } catch {
+      return 'green'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mimic:theme', theme)
+    } catch {}
+  }, [theme])
   const [chats, setChats] = useState<Chat[]>([])
   const [chatData, setChatData] = useState<Map<string, ChatData>>(new Map())
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [internalPendingFile, setInternalPendingFile] = useState<{ file: File; content: string; chatId: string; chatName?: string } | null>(null)
+  const [internalPendingFile, setInternalPendingFile] = useState<{ file: File; content: string; chatId: string; chatName?: string; prevActiveChatId?: string } | null>(null)
   const [internalShowConfirmModal, setInternalShowConfirmModal] = useState(false)
 
   // Use external props if provided (from page-level drag), otherwise use internal state (from button upload)
@@ -66,6 +95,40 @@ export default function ChatContainer({
         ],
       ])
     )
+  }, [])
+
+  // Migration: convert any previously-processed uploaded chats that stored
+  // normalized 'user'/'ai' sender tokens back to the original sender tokens
+  // (and set isFromPrimary) when we mount. This fixes chats uploaded before
+  // the change that preserved parsed `uploadedChat` data.
+  useEffect(() => {
+    setChatData((prev) => {
+      let changed = false
+      const newMap = new Map(prev)
+      for (const [id, data] of prev.entries()) {
+        if (data.uploadedChat && Array.isArray(data.uploadedChat) && data.uploadedChat.length > 0) {
+          const firstMsg = data.messages && data.messages[0]
+          // If messages look like old normalized form ('user'|'ai'), rebuild them
+          if (firstMsg && (firstMsg.sender === 'user' || firstMsg.sender === 'ai')) {
+            const senders = extractSenders(data.uploadedChat)
+            const rebuilt: Message[] = data.uploadedChat.map((msg, idx) => ({
+              id: `uploaded-${id}-${idx}`,
+              text: msg.text,
+              sender: msg.sender,
+              isFromPrimary: msg.sender === senders[0],
+              timestamp: msg.date,
+            }))
+            newMap.set(id, {
+              ...data,
+              messages: rebuilt,
+              chatSenders: senders,
+            })
+            changed = true
+          }
+        }
+      }
+      return changed ? newMap : prev
+    })
   }, [])
 
   const handleSelectChat = (chatId: string) => {
@@ -124,7 +187,11 @@ export default function ChatContainer({
       const chatMessages: Message[] = parsedMessages.map((msg, idx) => ({
         id: `uploaded-${chatId}-${idx}`,
         text: msg.text,
-        sender: msg.sender === senders[0] ? 'user' : 'ai',
+        // Keep the original sender token (e.g. 'A', 'B' or a real name). We'll
+        // mark messages from the primary sender via isFromPrimary so the UI can
+        // align bubbles and still resolve initials correctly.
+        sender: msg.sender,
+        isFromPrimary: msg.sender === senders[0],
         timestamp: msg.date,
       }))
 
@@ -205,6 +272,8 @@ export default function ChatContainer({
         return newMap
       })
       // Activate the new chat immediately so the UI shows the new conversation
+      // capture previous active chat so we can restore it if the user cancels
+      const previousActive = activeChatId
       setActiveChatId(newChatId)
 
       // Mirror the external pending file into internalPendingFile with the new chatId
@@ -213,6 +282,7 @@ export default function ChatContainer({
         content: externalPendingFile.content,
         chatId: newChatId,
         chatName: inferredName,
+        prevActiveChatId: previousActive ?? undefined,
       })
       // Ensure internal modal state is set too (harmless if external modal is controlling)
       setInternalShowConfirmModal(true)
@@ -234,12 +304,32 @@ export default function ChatContainer({
   }
 
   const handleCancelUpload = () => {
+    // If we created a temporary chat for this pending file, remove it.
+    if (internalPendingFile) {
+      const createdId = internalPendingFile.chatId
+      const prevId = internalPendingFile.prevActiveChatId ?? null
+
+      // Remove the chat entry and its data map
+      setChatData((prev) => {
+        const newMap = new Map(prev)
+        newMap.delete(createdId)
+        return newMap
+      })
+
+      // Remove from chats list
+      setChats((prev) => prev.filter((c) => c.id !== createdId))
+
+      // Restore previous active chat (if any)
+      setActiveChatId(prevId)
+    }
+
     if (onCancelUpload) {
       onCancelUpload()
-    } else {
-      setInternalShowConfirmModal(false)
-      setInternalPendingFile(null)
     }
+
+    // Clear internal modal/pending state
+    setInternalShowConfirmModal(false)
+    setInternalPendingFile(null)
   }
 
   const handleSendMessage = (message: Message, chatId: string) => {
@@ -278,7 +368,7 @@ export default function ChatContainer({
   const activeChat = activeChatId ? chatData.get(activeChatId) : null
 
   return (
-    <div className="flex h-screen bg-gray-100 relative">
+    <div className={`flex h-screen bg-gray-50 relative ${mounted ? 'mounted' : 'not-mounted'}`}>
 
       {/* Confirmation Modal */}
       <ConfirmModal
@@ -296,25 +386,35 @@ export default function ChatContainer({
         cancelText="Cancel"
       />
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile overlay and sidebar */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-40 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="fixed z-50 left-0 top-0 h-full w-80 md:hidden">
+            <ChatsSidebar
+              chats={sortedChats}
+              activeChatId={activeChatId}
+              onSelectChat={handleSelectChat}
+              onNewChat={handleNewChat}
+              theme={theme}
+              setTheme={setTheme}
+            />
+          </div>
+        </>
       )}
 
-      {/* Sidebar */}
-      <div
-        className={`absolute md:relative z-50 h-full w-80 flex-shrink-0 transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
-      >
+      {/* Desktop Sidebar (always visible on md+) */}
+      <div className="hidden md:block z-20 h-full w-80 flex-shrink-0">
         <ChatsSidebar
           chats={sortedChats}
           activeChatId={activeChatId}
           onSelectChat={handleSelectChat}
           onNewChat={handleNewChat}
+          theme={theme}
+          setTheme={setTheme}
         />
       </div>
 
@@ -330,13 +430,14 @@ export default function ChatContainer({
             onFileUpload={(content, fileName, chatName) => handleFileUpload(content, activeChat.id, fileName, chatName)}
             onSendMessage={(message) => handleSendMessage(message, activeChat.id)}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+            theme={theme}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gray-50">
             <div className="text-center text-gray-500">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="md:hidden mb-4 bg-whatsapp-green text-white px-4 py-2 rounded-lg hover:bg-whatsapp-dark transition-colors"
+                className="md:hidden mb-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
               >
                 Open Chats
               </button>

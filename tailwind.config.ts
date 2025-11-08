@@ -2,20 +2,26 @@ import type { Config } from 'tailwindcss'
 
 const config: Config = {
   content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{ts,tsx,js,jsx}',
+    './components/**/*.{ts,tsx,js,jsx}',
+    './pages/**/*.{ts,tsx,js,jsx}',
   ],
   theme: {
     extend: {
       colors: {
-        whatsapp: {
-          green: '#25D366',
-          dark: '#128C7E',
-          darker: '#075E54',
-          light: '#DCF8C6',
-          lighter: '#ECE5DD',
+        mimic: {
+          dark: '#0f172a',
+          teal: '#0b7b6b',
+          accent: '#1be38a',
+          accent2: '#6ac6ff',
+          glass: 'rgba(255,255,255,0.06)',
         },
+      },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+      },
+      borderRadius: {
+        'mimic': '14px',
       },
     },
   },
