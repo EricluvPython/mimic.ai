@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import FileUpload from './FileUpload'
 import { type ParsedMessage } from '@/lib/chatParser'
+import { queryMimic, getConversationStarters } from '@/lib/api'
 import dayjs from 'dayjs' // ✅ Added for date dividers
 
 export interface Message {
@@ -43,6 +44,12 @@ export default function ChatInterface({
   const [inputText, setInputText] = useState('')
   const [isAiMode, setIsAiMode] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([
+    'Summarize this chat 🧠',
+    'Write a funny reply 😂',
+    'Give me key insights 💡',
+  ])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const prevChatIdRef = useRef<string | null>(null)
@@ -66,6 +73,48 @@ export default function ChatInterface({
     prevMessagesCountRef.current = messages.length
   }, [messages, chatId])
 
+  // Fetch AI suggestions when AI mode is enabled and we have chat data
+  useEffect(() => {
+    if (isAiMode && chatSenders.length > 0) {
+      const fetchSuggestions = async () => {
+        setLoadingSuggestions(true)
+        try {
+          const targetUsername = chatName !== 'New Chat' ? chatName : chatSenders[0]
+          console.log('Fetching suggestions for:', targetUsername)
+          const response = await getConversationStarters(targetUsername)
+          console.log('Suggestions response:', response)
+          
+          // Extract suggestions from the response
+          if (response.suggestions && Array.isArray(response.suggestions)) {
+            // Extract the 'starter' text from each suggestion object
+            const starterTexts = response.suggestions
+              .map((s: any) => s.starter || s)
+              .slice(0, 3)
+            
+            if (starterTexts.length > 0) {
+              setAiSuggestions(starterTexts)
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch AI suggestions:', error)
+          // Keep default suggestions on error
+        } finally {
+          setLoadingSuggestions(false)
+        }
+      }
+
+      fetchSuggestions()
+    } else if (!isAiMode) {
+      // Reset to default suggestions when AI mode is turned off
+      setAiSuggestions([
+        'Summarize this chat 🧠',
+        'Write a funny reply 😂',
+        'Give me key insights 💡',
+      ])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAiMode, chatName])
+
   const handleSendMessage = async () => {
     if (!inputText.trim()) return
 
@@ -78,20 +127,45 @@ export default function ChatInterface({
     }
 
     onSendMessage(userMessage)
+    const currentInput = inputText
     setInputText('')
 
     if (isAiMode) {
       setIsProcessing(true)
-      setTimeout(() => {
+      try {
+        // Determine which username to use for AI mimicry
+        // Use the chat name if available, otherwise use the first sender from uploaded chat
+        const targetUsername = chatName !== 'New Chat' ? chatName : chatSenders[0] || 'user'
+        
+        // Get recent conversation context (last 10 messages)
+        const recentMessages = messages.slice(-10).map(msg => ({
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp.toISOString(),
+        }))
+        
+        // Call backend API to get AI response with context
+        const response = await queryMimic(targetUsername, currentInput, recentMessages)
+        
         const aiMessage: Message = {
           id: `${chatId}-${Date.now() + 1}`,
-          text: 'AI response will appear here once integrated...',
+          text: response.response,
           sender: 'ai',
           timestamp: new Date(),
         }
         onSendMessage(aiMessage)
+      } catch (error) {
+        console.error('AI query error:', error)
+        const errorMessage: Message = {
+          id: `${chatId}-${Date.now() + 1}`,
+          text: `Sorry, I couldn't generate a response. Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          sender: 'ai',
+          timestamp: new Date(),
+        }
+        onSendMessage(errorMessage)
+      } finally {
         setIsProcessing(false)
-      }, 1000)
+      }
     }
   }
 
@@ -217,27 +291,27 @@ export default function ChatInterface({
       {/* ✅ AI suggestion bubbles (show when AI Mode is ON) */}
       {isAiMode && (
         <div className="px-4 py-3 flex flex-wrap gap-2 justify-center ai-area">
-          {[
-            'Summarize this chat 🧠',
-            'Write a funny reply 😂',
-            'Give me key insights 💡',
-          ].map((suggestion, i) => (
-            <button
-              key={i}
-              onClick={() => setInputText(suggestion)}
-              className="text-sm px-3 py-1 rounded-full shadow-sm"
-              style={isFuturistic
-                ? (i === 0
-                  ? { background: 'linear-gradient(90deg,#60A5FA,#3B82F6)', color: 'white', boxShadow: '0 0 6px rgba(96,165,250,0.18)' }
-                  : { background: 'linear-gradient(90deg,#EFF8FF,#E9F2FF)', color: 'var(--futuristic-text-navy)' })
-                : (i === 0
-                  ? { background: 'linear-gradient(90deg,#34D399,#10B981)', color: 'white' }
-                  : { background: '#ECFDF5', color: '#065F46' })
-              }
-            >
-              {suggestion}
-            </button>
-          ))}
+          {loadingSuggestions ? (
+            <div className="text-sm text-gray-500">Loading suggestions...</div>
+          ) : (
+            aiSuggestions.map((suggestion, i) => (
+              <button
+                key={i}
+                onClick={() => setInputText(suggestion)}
+                className="text-sm px-3 py-1 rounded-full shadow-sm hover:shadow-md transition-shadow"
+                style={isFuturistic
+                  ? (i === 0
+                    ? { background: 'linear-gradient(90deg,#60A5FA,#3B82F6)', color: 'white', boxShadow: '0 0 6px rgba(96,165,250,0.18)' }
+                    : { background: 'linear-gradient(90deg,#EFF8FF,#E9F2FF)', color: 'var(--futuristic-text-navy)' })
+                  : (i === 0
+                    ? { background: 'linear-gradient(90deg,#34D399,#10B981)', color: 'white' }
+                    : { background: '#ECFDF5', color: '#065F46' })
+                }
+              >
+                {suggestion}
+              </button>
+            ))
+          )}
         </div>
       )}
 

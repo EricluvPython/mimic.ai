@@ -89,6 +89,7 @@ class QueryRequest(BaseModel):
     """Request model for querying the system."""
     username: str
     query: str
+    context: Optional[List[Dict[str, Any]]] = None
 
 
 class QueryResponse(BaseModel):
@@ -202,7 +203,7 @@ async def query_mimic(request: QueryRequest):
     Get a response suggestion that mimics the user's style.
     
     Args:
-        request: Query request with username and query text
+        request: Query request with username, query text, and optional conversation context
         
     Returns:
         Generated response mimicking the user's communication style
@@ -217,8 +218,13 @@ async def query_mimic(request: QueryRequest):
                 detail=f"User '{request.username}' not found in database"
             )
         
-        # Get conversation context
-        context = db_manager.get_conversation_context(request.username, limit=10)
+        # Use provided context if available, otherwise get from database
+        if request.context and len(request.context) > 0:
+            context = request.context
+            logger.info(f"Using provided context with {len(context)} messages")
+        else:
+            context = db_manager.get_conversation_context(request.username, limit=10)
+            logger.info(f"Retrieved context from database with {len(context)} messages")
         
         # Generate mimic response using LLM
         response = await llm_service.generate_mimic_response(

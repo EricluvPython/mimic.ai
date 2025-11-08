@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { extractTxtFromZip, extractPersonNameFromZip } from '@/lib/fileUtils'
+import { uploadChatFile } from '@/lib/api'
 import React from 'react'
 
 interface FileUploadProps {
@@ -32,6 +33,7 @@ export default function FileUpload({ onFileUpload, theme = 'green' }: FileUpload
       let content: string
       let fileName: string
       let chatName: string | undefined = undefined
+      let fileToUpload: File = file
 
       if (isZip) {
         // Extract TXT from ZIP
@@ -40,13 +42,39 @@ export default function FileUpload({ onFileUpload, theme = 'green' }: FileUpload
         fileName = result.fileName
         // Extract person name from ZIP filename
         chatName = extractPersonNameFromZip(file.name)
+        
+        // Create a new File object from the extracted text content
+        fileToUpload = new File([content], fileName, { type: 'text/plain' })
       } else {
         // Direct TXT file
         content = await file.text()
         fileName = file.name
+        fileToUpload = file
       }
 
+      // Upload to backend (don't block if this fails)
+      uploadChatFile(fileToUpload)
+        .then((response) => {
+          console.log('Backend upload successful:', response)
+          const stats = response.statistics || {}
+          const successMsg = 
+            `✅ Backend Upload Successful!\n\n` +
+            `Messages: ${stats.total_messages || stats.messages_inserted || 0}\n` +
+            `Senders: ${stats.unique_senders || stats.users_created || 0}\n` +
+            (stats.date_range 
+              ? `\nPeriod: ${stats.date_range.start} to ${stats.date_range.end}` 
+              : '')
+          
+          alert(successMsg)
+        })
+        .catch((apiError) => {
+          console.error('Backend upload failed:', apiError)
+          // Silently fail or show a toast - don't block the user
+        })
+
+      // Continue with local processing immediately (don't wait for backend)
       onFileUpload(content, fileName, chatName)
+      
     } catch (error) {
       console.error('Error reading file:', error)
       alert(`Error reading file: ${error instanceof Error ? error.message : 'Unknown error'}`)
