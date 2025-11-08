@@ -1,0 +1,40 @@
+# FastAPI and server dependencies
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+
+# OpenRouter/LLM integration
+httpx
+openai  # OpenRouter is OpenAI-compatible
+
+# Neo4j MCP integration
+mcp
+neo4j
+
+# Natural Language Processing for pattern extraction
+spacy
+textblob
+
+# Advanced NLP and Topic Modeling
+bertopic
+scikit-learn
+nltk
+gensim  # For LDA topic modeling
+
+# Sentiment and Style Analysis
+vaderSentiment
+textstat  # Readability metrics
+
+# Visualization
+plotly
+matplotlib
+seaborn
+networkx  # For graph visualizations
+
+# Utilities
+python-dotenv
+python-dateutil
+numpy
+pandas
