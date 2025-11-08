@@ -216,25 +216,64 @@ class AdvancedNLPAnalyzer:
 
 ## 💡 Advanced Use Cases
 
-### 12. Conversation Suggestions
-**Beyond mimicking single responses**:
-- Suggest conversation starters based on user interests
-- Recommend topics based on past discussions
-- Predict likely responses to questions
-- Generate summaries of long conversations
+### 12. Conversation Suggestions ✅ **IMPLEMENTED**
+**Status**: COMPLETE - Added in v1.1.0  
+**Implementation**:
+- ✅ Suggest conversation starters based on user interests
+- ✅ Recommend topics based on past discussions
+- ✅ Predict likely responses to questions
+- ✅ Generate summaries of long conversations
 
-### 13. Relationship Insights
-- Communication style compatibility
-- Interaction frequency analysis
-- Emotional support patterns
-- Conflict detection and analysis
+**Endpoints**:
+- `GET /suggestions/starters/{username}` - AI-generated conversation starters
+- `GET /suggestions/topics/{username}` - Topic recommendations
+- `POST /suggestions/predict-response` - Response prediction
 
-### 14. Personal Knowledge Base
-**Use graph as searchable knowledge base**:
-- "What did we discuss about project X?"
-- "When did I last talk about topic Y?"
-- Semantic search across all conversations
-- Memory recall assistance
+**Files**:
+- `app/conversation_suggestions.py` - Full implementation
+- See `ADVANCED_FEATURES.md` for usage examples
+
+### 13. Relationship Insights ✅ **IMPLEMENTED**
+**Status**: COMPLETE - Added in v1.1.0  
+**Implementation**:
+- ✅ Communication style compatibility analysis
+- ✅ Interaction frequency tracking with streaks
+- ✅ Emotional support pattern detection
+- ✅ Conflict detection and analysis
+- ✅ Conversation dynamics (initiations, response times, engagement)
+
+**Endpoints**:
+- `GET /insights/compatibility/{user1}/{user2}` - Compatibility scores
+- `GET /insights/interaction/{user1}/{user2}` - Interaction patterns
+- `GET /insights/support/{user1}/{user2}` - Emotional support
+- `GET /insights/conflicts/{user1}/{user2}` - Conflict detection
+- `GET /insights/dynamics/{user1}/{user2}` - Full dynamics analysis
+
+**Files**:
+- `app/relationship_insights.py` - Full implementation
+- Includes compatibility scoring, support pattern analysis, conflict detection
+
+### 14. Personal Knowledge Base ✅ **IMPLEMENTED**
+**Status**: COMPLETE - Added in v1.1.0  
+**Implementation**:
+- ✅ Semantic search across conversations
+- ✅ Topic discussion timeline ("What did we discuss about X?")
+- ✅ Last mention recall ("When did I last talk about Y?")
+- ✅ Fact extraction from conversations
+- ✅ Entity knowledge graphs
+- ✅ Memory recall assistance
+
+**Endpoints**:
+- `GET /knowledge/search` - Keyword search with context
+- `GET /knowledge/topic/{topic}` - Topic discussion timeline
+- `GET /knowledge/last-mention/{keyword}` - Last mention recall
+- `GET /knowledge/facts` - Extract factual statements
+- `GET /knowledge/entity/{entity}` - Build knowledge graph for entity
+- `GET /knowledge/semantic-search` - Meaning-based search
+
+**Files**:
+- `app/knowledge_base.py` - Full implementation
+- Includes fact extraction, relationship extraction, semantic search
 
 ---
 

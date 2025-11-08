@@ -4,11 +4,37 @@ WhatsApp Chat Analysis & User Mimicry System - A hackathon project that analyzes
 
 ## 🎯 Features
 
+### Core Features
 - **Chat Import**: Upload WhatsApp chat exports (.txt format)
 - **Intelligent Graph Database**: Neo4j-powered knowledge graph capturing user thinking patterns, topics, and speech characteristics
 - **AI-Powered Mimicry**: OpenRouter LLM integration to generate responses that match user's communication style
 - **Incremental Updates**: Add new messages to existing knowledge graph
 - **REST API**: FastAPI-based backend for easy frontend integration
+
+### Advanced Analysis
+- **BERTopic & LDA**: Advanced topic modeling using transformer-based and statistical methods
+- **Sentiment Analysis**: Track sentiment progression over time with daily aggregation
+- **Personality Insights**: Big Five personality trait analysis from communication patterns
+- **Conversation Patterns**: Response times, turn-taking, activity patterns, question analysis
+
+### New: Conversation Suggestions
+- **Smart Starters**: AI-generated conversation starters based on user interests
+- **Topic Recommendations**: Suggest new topics related to past discussions
+- **Response Prediction**: Predict likely response patterns to questions
+
+### New: Relationship Insights
+- **Compatibility Analysis**: Communication style compatibility between users
+- **Interaction Frequency**: Detailed interaction patterns and streaks
+- **Emotional Support**: Analyze support patterns in conversations
+- **Conflict Detection**: Identify potential conflicts and tension
+- **Conversation Dynamics**: Who initiates, response times, engagement scores
+
+### New: Personal Knowledge Base
+- **Semantic Search**: Meaning-based search across all conversations
+- **Topic Timeline**: Find when specific topics were discussed
+- **Last Mention Recall**: "When did we last talk about X?"
+- **Fact Extraction**: Extract factual statements and information
+- **Entity Knowledge Graph**: Build knowledge graphs for people, places, things
 
 ## 🏗️ Architecture
 
@@ -196,6 +222,97 @@ Returns: Communication formality gauge chart
 ```http
 GET /analyze/comprehensive/{username}
 Returns: Complete analysis combining all metrics
+```
+
+### 8. **Conversation Suggestions** 💡
+
+#### Get Conversation Starters
+```http
+GET /suggestions/starters/{username}?recent_days=30
+Returns: AI-generated conversation starters based on user interests
+```
+
+#### Get Topic Recommendations
+```http
+GET /suggestions/topics/{username}
+Returns: Recommended topics related to past discussions
+```
+
+#### Predict Response
+```http
+POST /suggestions/predict-response
+Body: {"user_context": "username", "query": "question"}
+Returns: Predicted response patterns based on history
+```
+
+### 9. **Relationship Insights** 🤝
+
+#### Analyze Compatibility
+```http
+GET /insights/compatibility/{user1}/{user2}
+Returns: Communication style compatibility score and metrics
+```
+
+#### Analyze Interaction Frequency
+```http
+GET /insights/interaction/{user1}/{user2}
+Returns: Interaction patterns, streaks, and balance
+```
+
+#### Analyze Emotional Support
+```http
+GET /insights/support/{user1}/{user2}
+Returns: Emotional support patterns between users
+```
+
+#### Detect Conflicts
+```http
+GET /insights/conflicts/{user1}/{user2}
+Returns: Potential conflict patterns and health score
+```
+
+#### Analyze Conversation Dynamics
+```http
+GET /insights/dynamics/{user1}/{user2}
+Returns: Who initiates, response times, engagement
+```
+
+### 10. **Personal Knowledge Base** 🧠
+
+#### Search Conversations
+```http
+GET /knowledge/search?q=keyword&username=optional&limit=10
+Returns: Search results with relevance scores and context
+```
+
+#### Find Topic Discussions
+```http
+GET /knowledge/topic/{topic}?username=optional
+Returns: Timeline of when topic was discussed
+```
+
+#### Recall Last Mention
+```http
+GET /knowledge/last-mention/{keyword}?username=optional
+Returns: Last time a keyword was mentioned with context
+```
+
+#### Extract Facts
+```http
+GET /knowledge/facts?username=optional
+Returns: Factual statements extracted from conversations
+```
+
+#### Query Entity Knowledge
+```http
+GET /knowledge/entity/{entity}
+Returns: Knowledge graph for a person, place, or thing
+```
+
+#### Semantic Search
+```http
+GET /knowledge/semantic-search?q=query&limit=10
+Returns: Meaning-based search results (not just keywords)
 ```
 
 ## 📝 WhatsApp Chat Export Format

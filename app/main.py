@@ -17,6 +17,9 @@ from app.llm_service import OpenRouterService
 from app.nlp_analyzer import AdvancedNLPAnalyzer
 from app.conversation_analyzer import ConversationPatternAnalyzer
 from app.visualization_service import VisualizationService
+from app.conversation_suggestions import ConversationSuggestionsService
+from app.relationship_insights import RelationshipInsightsService
+from app.knowledge_base import PersonalKnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -31,6 +34,9 @@ llm_service: OpenRouterService = OpenRouterService()
 nlp_analyzer: AdvancedNLPAnalyzer = AdvancedNLPAnalyzer()
 conversation_analyzer: ConversationPatternAnalyzer = ConversationPatternAnalyzer()
 viz_service: VisualizationService = VisualizationService()
+suggestions_service: ConversationSuggestionsService = ConversationSuggestionsService()
+insights_service: RelationshipInsightsService = RelationshipInsightsService()
+knowledge_base: PersonalKnowledgeBase = PersonalKnowledgeBase()
 
 
 @asynccontextmanager
@@ -652,6 +658,455 @@ async def analyze_comprehensive(username: str):
         raise HTTPException(
             status_code=500,
             detail=f"Error generating comprehensive analysis: {str(e)}"
+        )
+
+
+# ============================================================================
+# CONVERSATION SUGGESTIONS ENDPOINTS
+# ============================================================================
+
+@app.get("/suggestions/starters/{username}")
+async def get_conversation_starters(username: str, recent_days: int = 30):
+    """
+    Get AI-generated conversation starter suggestions for a user.
+    
+    Args:
+        username: Target user
+        recent_days: Consider topics from last N days
+        
+    Returns:
+        Conversation starter suggestions
+    """
+    try:
+        # Get user's messages
+        messages = db_manager.get_all_messages_for_user(username)
+        if not messages:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        
+        # Get user's topics
+        patterns = db_manager.query_user_patterns(username)
+        topics = patterns.get('topics', [])
+        
+        # Generate suggestions
+        suggestions = suggestions_service.suggest_conversation_starters(
+            username, messages, topics, recent_days
+        )
+        
+        return suggestions
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Conversation starters error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating conversation starters: {str(e)}"
+        )
+
+
+@app.get("/suggestions/topics/{username}")
+async def get_topic_recommendations(username: str):
+    """
+    Recommend new topics based on user's conversation history.
+    
+    Args:
+        username: Target user
+        
+    Returns:
+        Topic recommendations
+    """
+    try:
+        messages = db_manager.get_all_messages_for_user(username)
+        if not messages:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        
+        # Get all topics and user's discussed topics
+        graph_structure = db_manager.get_graph_structure()
+        all_topics = graph_structure.get('nodes', [])
+        all_topics = [n for n in all_topics if n.get('type') == 'topic']
+        
+        patterns = db_manager.query_user_patterns(username)
+        discussed_topics = [t['topic'] for t in patterns.get('topics', [])]
+        
+        recommendations = suggestions_service.recommend_topics(
+            username, messages, all_topics, discussed_topics
+        )
+        
+        return recommendations
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Topic recommendations error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating topic recommendations: {str(e)}"
+        )
+
+
+@app.post("/suggestions/predict-response")
+async def predict_response(request: QueryRequest):
+    """
+    Predict likely response patterns based on a question.
+    
+    Body:
+        {
+            "user_context": "username",
+            "query": "question to predict response for"
+        }
+        
+    Returns:
+        Response prediction
+    """
+    try:
+        username = request.user_context
+        question = request.query
+        
+        messages = db_manager.get_all_messages_for_user(username)
+        if not messages:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        
+        prediction = suggestions_service.predict_response(question, messages)
+        
+        return prediction
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Response prediction error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error predicting response: {str(e)}"
+        )
+
+
+# ============================================================================
+# RELATIONSHIP INSIGHTS ENDPOINTS
+# ============================================================================
+
+@app.get("/insights/compatibility/{user1}/{user2}")
+async def analyze_user_compatibility(user1: str, user2: str):
+    """
+    Analyze communication style compatibility between two users.
+    
+    Args:
+        user1: First user
+        user2: Second user
+        
+    Returns:
+        Compatibility analysis
+    """
+    try:
+        user1_messages = db_manager.get_all_messages_for_user(user1)
+        user2_messages = db_manager.get_all_messages_for_user(user2)
+        
+        if not user1_messages:
+            raise HTTPException(status_code=404, detail=f"User '{user1}' not found")
+        if not user2_messages:
+            raise HTTPException(status_code=404, detail=f"User '{user2}' not found")
+        
+        compatibility = insights_service.analyze_compatibility(
+            user1_messages, user2_messages, user1, user2
+        )
+        
+        return compatibility
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Compatibility analysis error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing compatibility: {str(e)}"
+        )
+
+
+@app.get("/insights/interaction/{user1}/{user2}")
+async def analyze_interaction_frequency(user1: str, user2: str):
+    """
+    Analyze interaction frequency and patterns between two users.
+    
+    Args:
+        user1: First user
+        user2: Second user
+        
+    Returns:
+        Interaction frequency analysis
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        analysis = insights_service.analyze_interaction_frequency(
+            all_messages, user1, user2
+        )
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Interaction frequency error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing interactions: {str(e)}"
+        )
+
+
+@app.get("/insights/support/{user1}/{user2}")
+async def analyze_emotional_support(user1: str, user2: str):
+    """
+    Analyze emotional support patterns between two users.
+    
+    Args:
+        user1: First user
+        user2: Second user
+        
+    Returns:
+        Emotional support analysis
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        analysis = insights_service.analyze_emotional_support(
+            all_messages, user1, user2
+        )
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Emotional support analysis error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing emotional support: {str(e)}"
+        )
+
+
+@app.get("/insights/conflicts/{user1}/{user2}")
+async def detect_conversation_conflicts(user1: str, user2: str):
+    """
+    Detect potential conflict patterns in conversations.
+    
+    Args:
+        user1: First user
+        user2: Second user
+        
+    Returns:
+        Conflict detection analysis
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        analysis = insights_service.detect_conflicts(
+            all_messages, user1, user2
+        )
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Conflict detection error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error detecting conflicts: {str(e)}"
+        )
+
+
+@app.get("/insights/dynamics/{user1}/{user2}")
+async def analyze_conversation_dynamics(user1: str, user2: str):
+    """
+    Comprehensive analysis of conversation dynamics between two users.
+    
+    Args:
+        user1: First user
+        user2: Second user
+        
+    Returns:
+        Conversation dynamics analysis
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        analysis = insights_service.analyze_conversation_dynamics(
+            all_messages, user1, user2
+        )
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Dynamics analysis error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing conversation dynamics: {str(e)}"
+        )
+
+
+# ============================================================================
+# PERSONAL KNOWLEDGE BASE ENDPOINTS
+# ============================================================================
+
+@app.get("/knowledge/search")
+async def search_knowledge_base(q: str, username: Optional[str] = None, limit: int = 10):
+    """
+    Search conversation history for specific topics or keywords.
+    
+    Query params:
+        q: Search query
+        username: Optional filter by user
+        limit: Maximum results (default: 10)
+        
+    Returns:
+        Search results
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        results = knowledge_base.search_conversations(
+            q, all_messages, username, limit
+        )
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Knowledge search error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error searching knowledge base: {str(e)}"
+        )
+
+
+@app.get("/knowledge/topic/{topic}")
+async def find_topic_discussions(topic: str, username: Optional[str] = None):
+    """
+    Find when a specific topic was discussed.
+    
+    Args:
+        topic: Topic to search for
+        username: Optional filter by user
+        
+    Returns:
+        Timeline of topic discussions
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        timeline = knowledge_base.find_discussion_about(
+            topic, all_messages, username
+        )
+        
+        return timeline
+        
+    except Exception as e:
+        logger.error(f"Topic discussion search error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error finding topic discussions: {str(e)}"
+        )
+
+
+@app.get("/knowledge/last-mention/{keyword}")
+async def recall_last_mention(keyword: str, username: Optional[str] = None):
+    """
+    Find the last time a keyword was mentioned.
+    
+    Args:
+        keyword: Keyword to search for
+        username: Optional filter by user
+        
+    Returns:
+        Last mention information
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        result = knowledge_base.recall_last_mention(
+            keyword, all_messages, username
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Last mention recall error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error recalling last mention: {str(e)}"
+        )
+
+
+@app.get("/knowledge/facts")
+async def extract_conversation_facts(username: Optional[str] = None):
+    """
+    Extract factual statements from conversations.
+    
+    Query params:
+        username: Optional filter by user
+        
+    Returns:
+        Extracted facts
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        facts = knowledge_base.extract_facts(all_messages, username)
+        
+        return facts
+        
+    except Exception as e:
+        logger.error(f"Fact extraction error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error extracting facts: {str(e)}"
+        )
+
+
+@app.get("/knowledge/entity/{entity}")
+async def query_entity_knowledge(entity: str):
+    """
+    Build knowledge graph for a specific entity.
+    
+    Args:
+        entity: Entity to query (person, place, thing)
+        
+    Returns:
+        Knowledge graph data for entity
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        graph = knowledge_base.build_knowledge_graph_query(
+            entity, all_messages
+        )
+        
+        return graph
+        
+    except Exception as e:
+        logger.error(f"Entity knowledge query error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error querying entity knowledge: {str(e)}"
+        )
+
+
+@app.get("/knowledge/semantic-search")
+async def semantic_search_knowledge(q: str, limit: int = 10):
+    """
+    Perform semantic (meaning-based) search across conversations.
+    
+    Query params:
+        q: Search query
+        limit: Maximum results
+        
+    Returns:
+        Semantic search results
+    """
+    try:
+        all_messages = db_manager.get_all_messages()
+        
+        results = knowledge_base.semantic_search(q, all_messages, limit)
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Semantic search error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error performing semantic search: {str(e)}"
         )
 
 
