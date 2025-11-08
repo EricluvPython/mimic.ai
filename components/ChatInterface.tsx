@@ -39,14 +39,32 @@ export default function ChatInterface({
   const [isProcessing, setIsProcessing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const prevChatIdRef = useRef<string | null>(null)
+  const prevMessagesCountRef = useRef<number>(0)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    // Use the provided behavior ('auto' or 'smooth').
+    // When switching chats (large number of messages) we'll call with 'auto'
+    // so the UI starts at the latest immediately without visible scrolling.
+    messagesEndRef.current?.scrollIntoView({ behavior })
   }
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    // If we're switching chats (chatId changed), jump to bottom immediately.
+    if (prevChatIdRef.current !== chatId) {
+      scrollToBottom('auto')
+    } else {
+      // Same chat: if messages appended, use smooth scroll for nicer UX.
+      const prevCount = prevMessagesCountRef.current || 0
+      if (messages.length > prevCount) {
+        scrollToBottom('smooth')
+      }
+    }
+
+    // Update trackers for next render
+    prevChatIdRef.current = chatId
+    prevMessagesCountRef.current = messages.length
+  }, [messages, chatId])
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return
