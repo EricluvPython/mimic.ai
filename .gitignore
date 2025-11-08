@@ -1,0 +1,29 @@
+# Environment
+.env*
+venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data
+uploads/
+*.txt
+data/
+
+# Neo4j
+neo4j_data/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
