@@ -14,7 +14,6 @@ __pycache__/
 
 # Data
 uploads/
-*.txt
 data/
 visualizations_output/
 
